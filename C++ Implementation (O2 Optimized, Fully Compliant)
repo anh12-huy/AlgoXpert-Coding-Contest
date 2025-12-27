@@ -1,0 +1,153 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+/* ===============================
+   Utility: read fast
+================================ */
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int N;
+    long long C0;
+    cin >> N;
+    cin >> C0;
+
+    int S_short, S_long;
+    cin >> S_short >> S_long;
+
+    int MR_window;
+    double MR_threshold;
+    cin >> MR_window >> MR_threshold;
+
+    int BO_window;
+    double BO_threshold;
+    cin >> BO_window >> BO_threshold;
+
+    vector<double> price(N);
+    for (int i = 0; i < N; i++) cin >> price[i];
+
+    /* ===============================
+       Strategy 1: MA Crossover
+    ================================ */
+    {
+        long long capital = C0, shares = 0;
+        long long trades = 0;
+
+        double sumS = 0.0, sumL = 0.0;
+        bool prev_cross = false, has_prev = false;
+
+        for (int i = 0; i < N; i++) {
+            sumS += price[i];
+            sumL += price[i];
+
+            if (i >= S_short) sumS -= price[i - S_short];
+            if (i >= S_long)  sumL -= price[i - S_long];
+
+            if (i + 1 >= S_long) {
+                double smaS = sumS / S_short;
+                double smaL = sumL / S_long;
+                bool cross = smaS > smaL;
+
+                if (has_prev) {
+                    if (cross && !prev_cross && shares == 0) {
+                        shares = capital / price[i];
+                        capital -= (long long)(shares * price[i]);
+                        trades++;
+                    }
+                    else if (!cross && prev_cross && shares > 0) {
+                        capital += (long long)(shares * price[i]);
+                        shares = 0;
+                        trades++;
+                    }
+                }
+                prev_cross = cross;
+                has_prev = true;
+            }
+        }
+
+        if (shares > 0) {
+            capital += (long long)(shares * price[N - 1]);
+            trades++;
+        }
+
+        cout << capital << "\n" << trades << "\n";
+    }
+
+    /* ===============================
+       Strategy 2: Mean Reversion
+    ================================ */
+    {
+        long long capital = C0, shares = 0;
+        long long trades = 0;
+        double sum = 0.0;
+
+        for (int i = 0; i < N; i++) {
+            sum += price[i];
+            if (i >= MR_window) sum -= price[i - MR_window];
+
+            if (i + 1 >= MR_window) {
+                double ma = sum / MR_window;
+                if (shares == 0 && price[i] <= ma * (1.0 - MR_threshold)) {
+                    shares = capital / price[i];
+                    capital -= (long long)(shares * price[i]);
+                    trades++;
+                }
+                else if (shares > 0 && price[i] >= ma) {
+                    capital += (long long)(shares * price[i]);
+                    shares = 0;
+                    trades++;
+                }
+            }
+        }
+
+        if (shares > 0) {
+            capital += (long long)(shares * price[N - 1]);
+            trades++;
+        }
+
+        cout << capital << "\n" << trades << "\n";
+    }
+
+    /* ===============================
+       Strategy 3: Breakout
+    ================================ */
+    {
+        long long capital = C0, shares = 0;
+        long long trades = 0;
+
+        deque<int> dq;
+
+        for (int i = 0; i < N; i++) {
+            while (!dq.empty() && dq.front() <= i - BO_window)
+                dq.pop_front();
+
+            if (!dq.empty()) {
+                double max_high = price[dq.front()];
+                if (shares == 0 && price[i] >= max_high * (1.0 + BO_threshold)) {
+                    shares = capital / price[i];
+                    capital -= (long long)(shares * price[i]);
+                    trades++;
+                }
+                else if (shares > 0 && price[i] <= max_high) {
+                    capital += (long long)(shares * price[i]);
+                    shares = 0;
+                    trades++;
+                }
+            }
+
+            while (!dq.empty() && price[dq.back()] <= price[i])
+                dq.pop_back();
+            dq.push_back(i);
+        }
+
+        if (shares > 0) {
+            capital += (long long)(shares * price[N - 1]);
+            trades++;
+        }
+
+        cout << capital << "\n" << trades << "\n";
+    }
+
+    return 0;
+}
