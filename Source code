@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+import sys
+from collections import deque
+
+def read_input():
+    data = sys.stdin.read().strip().split()
+    if not data:
+        raise SystemExit("Empty input")
+    it = iter(data)
+    N = int(next(it))
+    C0 = int(next(it))
+    S_short, S_long = int(next(it)), int(next(it))
+    MR_window, MR_threshold = int(next(it)), float(next(it))
+    BO_window, BO_threshold = int(next(it)), float(next(it))
+    prices = [float(next(it)) for _ in range(N)]
+    return N, C0, S_short, S_long, MR_window, MR_threshold, BO_window, BO_threshold, prices
+
+def simulate_ma(prices, C0, S_short, S_long):
+    N = len(prices)
+    capital = C0
+    shares = 0
+    trades = 0
+
+    # moving averages using deques
+    sum_short = 0.0
+    sum_long = 0.0
+    q_short = deque()
+    q_long = deque()
+
+    prev_action = None  # "buy" or "sell" or None
+
+    for i in range(N):
+        p = prices[i]
+
+        # update short window
+        q_short.append(p)
+        sum_short += p
+        if len(q_short) > S_short:
+            sum_short -= q_short.popleft()
+        # update long window
+        q_long.append(p)
+        sum_long += p
+        if len(q_long) > S_long:
+            sum_long -= q_long.popleft()
+
+        buy = False
+        sell = False
+
+        if len(q_short) == S_short and len(q_long) == S_long:
+            SMA_short = sum_short / S_short
+            SMA_long = sum_long / S_long
+
+            if shares == 0 and SMA_short > SMA_long and (prev_action != "buy"):
+                # buy with all capital
+                buy = True
+            elif shares > 0 and SMA_short < SMA_long:
+                sell = True
+
+        if buy and shares == 0:
+            can_buy = capital // p
+            if can_buy > 0:
+                shares = can_buy
+                capital -= shares * p
+                trades += 1
+                prev_action = "buy"
+        if sell and shares > 0:
+            capital += shares * p
+            shares = 0
+            trades += 1
+            prev_action = "sell"
+
+    # liquidate at end
+    price_N = prices[-1]
+    if shares > 0:
+        capital += shares * price_N
+        shares = 0
+        trades += 1  # final sell (counted)
+    final_equity = int(capital)  # already integer-ish
+
+    return final_equity, trades
+
+def simulate_mr(prices, C0, MR_window, MR_threshold):
+    N = len(prices)
+    capital = C0
+    shares = 0
+    trades = 0
+    MA_MR = 0.0
+    # maintain moving average of last MR_window prices
+    window = deque()
+    sum_w = 0.0
+
+    for i in range(N):
+        p = prices[i]
+        window.append(p)
+        sum_w += p
+        if len(window) > MR_window:
+            sum_w -= window.popleft()
+
+        if len(window) == MR_window:
+            MA_MR = sum_w / MR_window
+            if shares == 0:
+                if p <= MA_MR * (1.0 - MR_threshold):
+                    # buy
+                    can_buy = capital // p
+                    if can_buy > 0:
+                        shares = can_buy
+                        capital -= shares * p
+                        trades += 1
+            else:
+                if p >= MA_MR:
+                    capital += shares * p
+                    shares = 0
+                    trades += 1
+
+    price_N = prices[-1]
+    if shares > 0:
+        capital += shares * price_N
+        shares = 0
+        trades += 1
+
+    final_equity = int(capital)
+    return final_equity, trades
+
+def simulate_bo(prices, C0, BO_window, BO_threshold):
+    N = len(prices)
+    capital = C0
+    shares = 0
+    trades = 0
+
+    max_high = deque()
+    window = deque()
+
+    for i in range(N):
+        p = prices[i]
+
+        # update max_high with last BO_window prices excluding current
+        # we maintain a window of last BO_window prices up to i-1
+        if i > 0:
+            window.append(prices[i-1])
+            while len(window) > BO_window:
+                window.popleft()
+        # maintain max_high for window
+        if window:
+            current_max = max(window)
+        else:
+            current_max = float('-inf')
+
+        if i == 0:
+            pass  # cannot buy yet
+
+        if len(window) == BO_window:
+            if shares == 0:
+                if p >= current_max * (1.0 + BO_threshold):
+                    can_buy = capital // p
+                    if can_buy > 0:
+                        shares = can_buy
+                        capital -= shares * p
+                        trades += 1
+            else:
+                if p <= current_max:
+                    capital += shares * p
+                    shares = 0
+                    trades += 1
+
+    # liquidate at end
+    price_N = prices[-1]
+    if shares > 0:
+        capital += shares * price_N
+        shares = 0
+        trades += 1
+
+    final_equity = int(capital)
+    return final_equity, trades
+
+def main():
+    N, C0, S_short, S_long, MR_window, MR_threshold, BO_window, BO_threshold, prices = read_input()
+
+    fe1, t1 = simulate_ma(prices, C0, S_short, S_long)
+    fe2, t2 = simulate_mr(prices, C0, MR_window, MR_threshold)
+    fe3, t3 = simulate_bo(prices, C0, BO_window, BO_threshold)
+
+    print(fe1)
+    print(t1)
+    print(fe2)
+    print(t2)
+    print(fe3)
+    print(t3)
+
+if __name__ == "__main__":
+    main()
