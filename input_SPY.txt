@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+import yfinance as yf
+import sys
+
+def main():
+    ticker = "SPY"
+    start = "2010-01-01"
+    end = "2024-12-31"
+    data = yf.download(ticker, start=start, end=end, interval="1d")
+    close = data["Close"].dropna()
+    prices = close.tolist()
+    N = len(prices)
+
+    # example parameters (you can optimize)
+    C0 = 100000
+    S_short, S_long = 20, 50
+    MR_window, MR_threshold = 20, 0.02
+    BO_window, BO_threshold = 50, 0.01
+
+    with open("input_SPY.txt", "w") as f:
+        f.write(f"{N}\n")
+        f.write(f"{C0}\n")
+        f.write(f"{S_short} {S_long}\n")
+        f.write(f"{MR_window} {MR_threshold}\n")
+        f.write(f"{BO_window} {BO_threshold}\n")
+        for p in prices:
+            f.write(f"{p}\n")
+
+if __name__ == "__main__":
+    main()
